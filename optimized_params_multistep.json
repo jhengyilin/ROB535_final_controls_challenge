@@ -1,0 +1,38 @@
+{
+  "kp": 0.21255532705986704,
+  "ki": 0.09181609253275837,
+  "kd": 0.04508276667132059,
+  "k_roll": 0.6710835046928303,
+  "k_ff_immediate": 0.08525270152345502,
+  "k_ff_lookahead": 0.4092727782355886,
+  "lookahead_start_idx": 2.0,
+  "lookahead_end_idx": 6.0,
+  "lookahead_decay": 0.7621897174228836,
+  "error_filter_alpha": 0.37391925712639285,
+  "action_smoothing": 0.1856023462415054,
+  "velocity_scaling": 0.0668214130201828,
+  "_meta": {
+    "description": "Multi-step lookahead optimized with CMA-ES",
+    "timestamp": "2025-12-07 16:22:03",
+    "parameters": 12,
+    "lookahead_steps": 5,
+    "generation": 12,
+    "cost": 46.31691085020475,
+    "population_size": 40,
+    "status": "in_progress",
+    "hyperparameters": {
+      "population_size": 40,
+      "max_generations": 50,
+      "initial_sigma": 0.2,
+      "num_segments_per_eval": 50,
+      "num_workers": 4,
+      "use_normalization": true,
+      "use_adaptive_segments": true,
+      "target_cost": 45.0,
+      "stagnation_generations": 20,
+      "controller_name": "custom_multistep",
+      "data_dir": "./data",
+      "model_path": "./models/tinyphysics.onnx"
+    }
+  }
+}
