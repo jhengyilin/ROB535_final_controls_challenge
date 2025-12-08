@@ -53,9 +53,8 @@ class Controller(BaseController):
             self.params = params.copy()
         else:
             # Try to load optimized parameters from file
-            params_file = os.path.join(os.path.dirname(__file__), '..', 'optimized_params_velocity.json')
-            # params_file = os.path.join(os.path.dirname(__file__), '..', 'optimized_params_multistep.json')
-            # params_file = os.path.join(os.path.dirname(__file__), '..', 'optimized_params_multistep_final.json')
+            # params_file = os.path.join(os.path.dirname(__file__), '..', 'optimized_params_velocity.json')
+            params_file = os.path.join(os.path.dirname(__file__), '..', 'optimized_params_velocity_final.json')
             
             if os.path.exists(params_file):
                 with open(params_file, 'r') as f:
