@@ -676,7 +676,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     config = CMAESConfig(
-        controller_name="custom_multistep",
+        controller_name="custom_multi_step",
         data_dir=args.data_dir,
         model_path=args.model_path,
         population_size=args.population_size,

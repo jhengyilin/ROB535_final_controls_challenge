@@ -720,7 +720,7 @@ if __name__ == "__main__":
         description="Train controller with CMA-ES",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("--controller", type=str, default="custom",
+    parser.add_argument("--controller", type=str, default="custom_single_step",
                        help="Controller module name")
     parser.add_argument("--data_dir", type=str, default="./data",
                        help="Directory containing segment CSV files")

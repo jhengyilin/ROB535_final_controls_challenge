@@ -62,14 +62,56 @@ class LataccelTokenizer:
 class TinyPhysicsModel:
   def __init__(self, model_path: str, debug: bool) -> None:
     self.tokenizer = LataccelTokenizer()
-    options = ort.SessionOptions()
-    options.intra_op_num_threads = 1
-    options.inter_op_num_threads = 1
-    options.log_severity_level = 3
-    provider = 'CPUExecutionProvider'
+    # Configure session options for optimization
+    sess_options = ort.SessionOptions()
+    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    sess_options.intra_op_num_threads = 1  # Let CoreML handle threading
 
-    with open(model_path, "rb") as f:
-      self.ort_session = ort.InferenceSession(f.read(), options, [provider])
+    # Set up execution providers - CoreML first for Apple Silicon GPU
+    providers = []
+    available_providers = ort.get_available_providers()
+
+    
+    # Try CoreML first (uses GPU + Neural Engine on Apple Silicon)
+    if 'CoreMLExecutionProvider' in available_providers:
+        coreml_options = {
+            'MLComputeUnits': 'ALL',  # Use CPU, GPU, and Neural Engine
+        }
+        providers.append(('CoreMLExecutionProvider', coreml_options))
+    
+       
+    providers.append('CPUExecutionProvider')
+
+    # print(providers)
+
+    self.ort_session = ort.InferenceSession(
+        model_path,
+        sess_options=sess_options,
+        providers=providers
+    )
+
+    # with open(model_path, "rb") as f:
+    #   self.ort_session = ort.InferenceSession(f.read(), options, [provider])
+
+
+    ########CUDU_MACHINE UNCOMMENT THIS PART#################
+    # self.tokenizer = LataccelTokenizer()
+    # options = ort.SessionOptions()
+    # options.intra_op_num_threads = 1
+    # options.inter_op_num_threads = 1
+    # options.log_severity_level = 3
+    # if 'CUDAExecutionProvider' in ort.get_available_providers():
+    #   if debug:
+    #     print("ONNX Runtime is using GPU")
+    #   provider = ('CUDAExecutionProvider', {'cudnn_conv_algo_search': 'DEFAULT'})
+    # else:
+    #   if debug:
+    #     print("ONNX Runtime is using CPU")
+    #   provider = 'CPUExecutionProvider'
+
+    # with open(model_path, "rb") as f:
+    #   self.ort_session = ort.InferenceSession(f.read(), options, [provider])
+    ###########################################################################
 
   def softmax(self, x, axis=-1):
     e_x = np.exp(x - np.max(x, axis=axis, keepdims=True))
