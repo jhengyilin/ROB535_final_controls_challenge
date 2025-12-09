@@ -1,71 +1,186 @@
-<div align="center">
-<h1>comma Controls Challenge v2</h1>
+# ROB 535 Final Project
+
+## Overview
+
+This final project implements a lateral acceleration controller for autonomous vehicle steering using **CMA-ES (Covariance Matrix Adaptation Evolution Strategy)**. The controller is optimized to minimize both lateral acceleration tracking error and jerk (rate of change of acceleration) across diverse driving scenarios.
+
+## Controller Architecture
+
+The controller uses a multi-step lookahead approach that:
+
+1. Computes weighted average of future target lateral accelerations over a configurable window (with typical step size 2-8)
+2. Scales PID gains based on current and future vehicle acceleration and/or velocity
+3. Combines feedback (PID) and feedforward terms for robust control
+4. Filters errors and smooths actions to reduce oscillations
 
 
-<h3>
-  <a href="https://comma.ai/leaderboard">Leaderboard</a>
-  <span> · </span>
-  <a href="https://comma.ai/jobs">comma.ai/jobs</a>
-  <span> · </span>
-  <a href="https://discord.comma.ai">Discord</a>
-  <span> · </span>
-  <a href="https://x.com/comma_ai">X</a>
-</h3>
-
-</div>
-
-Machine learning models can drive cars, paint beautiful pictures and write passable rap. But they famously suck at doing low level controls. Your goal is to write a good controller. This repo contains a model that simulates the lateral movement of a car, given steering commands. The goal is to drive this "car" well for a given desired trajectory.
-
-## Getting Started
-We'll be using a synthetic dataset based on the [comma-steering-control](https://github.com/commaai/comma-steering-control) dataset for this challenge. These are actual car and road states from [openpilot](https://github.com/commaai/openpilot) users.
+## File Structure
 
 ```
-# install required packages
-# recommended python==3.11
-pip install -r requirements.txt
+ROB535_final_controls_challenge/
+├── train_cmaes_velocity.py          # Main CMA-ES training script
+├── eval.py                          # Evaluation script for comparing controllers
+├── tinyphysics.py                   # Physics simulator and model interface
+├── controllers/
+│   ├── custom_single_step.py        
+│   ├── custom_multi_step.py         
+│   ├── custom_velocity.py           # velocity as a factor
+│   ├── ffpid.py                     # lookahead pid
+│   ├── pid.py                       # Baseline PID controller
+│   └── ...
+├── data/                            # Training/evaluation data (CSV files)
+│   ├── 00000.csv
+│   ├── 00001.csv
+│   └── ...
+├── models/
+│   └── tinyphysics.onnx            # ONNX neural network physics model
+└── optimized_params_<controller>.json   # Optimized parameters (output)
 
-# test this works
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data/00000.csv --debug --controller pid
 ```
 
-There are some other scripts to help you get aggregate metrics:
+## Data Format
+
+The training data consists of CSV files, each representing a driving segment. Each CSV file contains the following columns:
+
+| Column | Description | Units |
+|--------|-------------|-------|
+| `t` | Time | seconds |
+| `vEgo` | Ego vehicle velocity | m/s |
+| `aEgo` | Ego vehicle forward acceleration | m/s² |
+| `roll` | Road roll angle | radians |
+| `targetLateralAcceleration` | Desired lateral acceleration | m/s² |
+| `steerCommand` | Steering command (ground truth) | normalized [-2, 2] |
+
+### Example Data Snippet
+
+```csv
+t,vEgo,aEgo,roll,targetLateralAcceleration,steerCommand
+0.0,33.770,0.017,0.037,1.004,-0.330
+0.1,33.764,-0.039,0.037,1.050,-0.335
+0.2,33.756,-0.068,0.037,1.056,-0.333
+...
 ```
-# batch Metrics of a controller on lots of routes
-python tinyphysics.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --controller pid
 
-# generate a report comparing two controllers
-python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 100 --test_controller pid --baseline_controller zero
+## Controller Training
 
+### Training Process
+
+The CMA-ES optimization process:
+
+1. **Initialization**: Starts with default PID parameters or loads from a warm-start file
+2. **Population Sampling**: Generates a population of candidate parameter sets from a multivariate Gaussian distribution
+3. **Evaluation**: Each candidate is evaluated on a subset of driving segments by:
+   - Running the controller in the physics simulator
+   - Computing total cost: `(lataccel_cost × 50) + jerk_cost`
+4. **Selection**: Best candidates (lowest cost) are selected as parents
+5. **Update**: Distribution parameters (mean, covariance, step size) are updated based on successful candidates
+6. **Iteration**: Process repeats for multiple generations until convergence
+
+
+### Running Training
+
+```bash
+# Basic training with default settings
+# replace <controller> with "single_step, multi_step, or velocity"
+python train_cmaes_<controller>.py
+
+# Custom configuration
+python train_cmaes_<controller>.py \
+    --data_dir ./data \
+    --model_path ./models/tinyphysics.onnx \
+    --population_size 40 \
+    --max_generations 100 \
+    --num_segments 50 \
+    --num_workers 4 \
+    --sigma 0.2 \
+    --target_cost 30.0 \
+    --warm_start optimized_params_*.json
+
+# Disable normalization (use physical parameter space)
+python train_cmaes_<controller>.py --no-normalize
+
+# Disable adaptive segment selection
+python train_cmaes_<controller>.py --no-adaptive
 ```
-You can also use the notebook at [`experiment.ipynb`](https://github.com/commaai/controls_challenge/blob/master/experiment.ipynb) for exploration.
 
-## TinyPhysics
-This is a "simulated car" that has been trained to mimic a very simple physics model (bicycle model) based simulator, given realistic driving noise. It is an autoregressive model similar to [ML Controls Sim](https://blog.comma.ai/096release/#ml-controls-sim) in architecture. Its inputs are the car velocity (`v_ego`), forward acceleration (`a_ego`), lateral acceleration due to road roll (`road_lataccel`), current car lateral acceleration (`current_lataccel`), and a steer input (`steer_action`), then it predicts the resultant lateral acceleration of the car.
+### Training Arguments
 
-## Controllers
-Your controller should implement a new [controller](https://github.com/commaai/controls_challenge/tree/master/controllers). This controller can be passed as an arg to run in-loop in the simulator to autoregressively predict the car's response.
+- `--data_dir`: Directory containing CSV segment files (default: `./data`)
+- `--model_path`: Path to ONNX physics model (default: `./models/tinyphysics.onnx`)
+- `--population_size`: CMA-ES population size λ (default: 40)
+- `--max_generations`: Maximum optimization generations (default: 100)
+- `--num_segments`: Number of segments per evaluation (default: 25)
+- `--num_workers`: Parallel workers for evaluation (default: 4)
+- `--sigma`: Initial step size (default: 0.2)
+- `--target_cost`: Target cost to reach (default: 30.0)
+- `--warm_start`: Path to JSON file with previous parameters (default: `optimized_params_velocity.json`)
+- `--no-normalize`: Disable parameter normalization to [0,1]
+- `--no-adaptive`: Disable adaptive segment selection
+
+### Output Files
+
+- `optimized_params_<controller>.json`: Best parameters found (updated each generation)
+- `optimized_params_<controller>_final.json`: Final optimized parameters
+- `checkpoint_<controller>_gen*.json`: Checkpoints every 5 generations
 
 ## Evaluation
-Each rollout will result in 2 costs:
-- `lataccel_cost`: $\dfrac{\Sigma(\mathrm{actual{\textunderscore}lat{\textunderscore}accel} - \mathrm{target{\textunderscore}lat{\textunderscore}accel})^2}{\text{steps}} * 100$
-- `jerk_cost`: $\dfrac{(\Sigma( \mathrm{actual{\textunderscore}lat{\textunderscore}accel_t} - \mathrm{actual{\textunderscore}lat{\textunderscore}accel_{t-1}}) / \Delta \mathrm{t} )^{2}}{\text{steps} - 1} * 100$
 
-It is important to minimize both costs. `total_cost`: $(\mathrm{lat{\textunderscore}accel{\textunderscore}cost} * 50) + \mathrm{jerk{\textunderscore}cost}$
+### Running Evaluation
 
-## Submission
-Run the following command, then submit `report.html` and your code to [this form](https://forms.gle/US88Hg7UR6bBuW3BA).
+Evaluate the optimized controller against a baseline:
 
-Competitive scores (`total_cost<100`) will be added to the leaderboard
-
+```bash
+python eval.py \
+    --model_path ./models/tinyphysics.onnx \
+    --data_path ./data \
+    --num_segs 100 \
+    --test_controller custom_<controller> \
+    --baseline_controller pid
 ```
-python eval.py --model_path ./models/tinyphysics.onnx --data_path ./data --num_segs 5000 --test_controller <insert your controller name> --baseline_controller pid
+
+This generates:
+- Cost statistics: Mean lataccel_cost, jerk_cost, and total_cost for both controllers
+- Visual comparison: Histograms of cost distributions
+- Sample rollouts: Plots showing lateral acceleration tracking for sample segments
+- HTML report: `report.html` with all results
+
+### Cost Metrics
+
+The evaluation computes two cost components:
+
+1. **Lateral Acceleration Cost**:
+   ```
+   lataccel_cost = Σ(actual_lataccel - target_lataccel)² / steps × 100
+   ```
+
+2. **Jerk Cost**:
+   ```
+   jerk_cost = Σ((lataccel_t - lataccel_{t-1}) / Δt)² / (steps - 1) × 100
+   ```
+
+3. **Total Cost**:
+   ```
+   total_cost = (lataccel_cost × 50) + jerk_cost
+   ```
+
+The controller aims to minimize total cost, balancing tracking accuracy with smoothness.
+
+## Controller Usage
+
+The optimized controller can be used in the simulator:
+
+```bash
+# Single segment test
+python tinyphysics.py \
+    --model_path ./models/tinyphysics.onnx \
+    --data_path ./data/00000.csv \
+    --controller <controller_name> \
+    --debug
+
+# Batch evaluation
+python tinyphysics.py \
+    --model_path ./models/tinyphysics.onnx \
+    --data_path ./data \
+    --num_segs 100 \
+    --controller <controller_name>
 ```
-
-## Changelog
-- With [this commit](https://github.com/commaai/controls_challenge/commit/fdafbc64868b70d6ec9c305ab5b52ec501ea4e4f) we made the simulator more robust to outlier actions and changed the cost landscape to incentivize more aggressive and interesting solutions.
-- With [this commit](https://github.com/commaai/controls_challenge/commit/4282a06183c10d2f593fc891b6bc7a0859264e88) we fixed a bug that caused the simulator model to be initialized wrong.
-
-## Work at comma
-
-Like this sort of stuff? You might want to work at comma!
-[comma.ai/jobs](https://comma.ai/jobs)
