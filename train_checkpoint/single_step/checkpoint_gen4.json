@@ -1,0 +1,35 @@
+{
+  "kp": 0.32638283703389315,
+  "ki": 0.11195311460805017,
+  "kd": 0.469993154557714,
+  "k_roll": 0.12787842263387106,
+  "k_ff_immediate": 0.09801094531937075,
+  "k_ff_lookahead": 0.4910286699333083,
+  "lookahead_idx": 5.840220528276443,
+  "error_filter_alpha": 0.32110016560205207,
+  "action_smoothing": 0.5176007574928582,
+  "velocity_scaling": 0.016098753893258128,
+  "_meta": {
+    "description": "Optimized with CMA-ES",
+    "timestamp": "2025-12-07 23:26:02",
+    "parameters": 10,
+    "generation": 4,
+    "cost": 52.573797009238696,
+    "population_size": 40,
+    "status": "in_progress",
+    "hyperparameters": {
+      "population_size": 40,
+      "max_generations": 50,
+      "initial_sigma": 0.2,
+      "num_segments_per_eval": 50,
+      "num_workers": 6,
+      "use_normalization": true,
+      "use_adaptive_segments": true,
+      "target_cost": 45.0,
+      "stagnation_generations": 20,
+      "controller_name": "custom_single_step",
+      "data_dir": "./data",
+      "model_path": "./models/tinyphysics.onnx"
+    }
+  }
+}
